@@ -1,0 +1,115 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: always
+    # comment out if you want to externally connect DB
+    # ports:
+    #   - 5432:5432
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    environment:
+      - PGDATA=${PGDATA}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: on-failure
+    # comment out if you want to externally call skyvern API
+    ports:
+      - 8000:8000
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./videos:/data/videos
+      - ./har:/data/har
+      - ./log:/data/log
+      - ./.streamlit:/app/.streamlit
+      # Uncomment if you want to connect to any local changes
+      # - ./skyvern:/app/skyvern
+    environment:
+      - DATABASE_STRING=${DATABASE_STRING}
+      - BROWSER_TYPE=${BROWSER_TYPE}
+      # - ENABLE_OPENAI=${ENABLE_OPENAI}
+      # - LLM_KEY=${LLM_KEY}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENABLE_DEEPSEEK=true
+      - LLM_KEY=DEEPSEEK_CHAT  # Use DEEPSEEK_CODER if doing code-related tasks
+      - DEEPSEEK_API_KEY=sk-f1da6a1f2aed4c16903363889bf8862c
+
+      # If you want to use other LLM provider, like azure and anthropic:
+      # - ENABLE_ANTHROPIC=true
+      # - LLM_KEY=ANTHROPIC_CLAUDE3.5_SONNET
+      # - ANTHROPIC_API_KEY=<your_anthropic_key>
+      # Microsoft Azure OpenAI support:
+      # - ENABLE_AZURE=true
+      # - LLM_KEY=AZURE_OPENAI
+      # - AZURE_DEPLOYMENT=<your_azure_deployment>
+      # - AZURE_API_KEY=<your_azure_api_key>
+      # - AZURE_API_BASE=<your_azure_api_base>
+      # - AZURE_API_VERSION=<your_azure_api_version>
+      # Amazon Bedrock Support:
+      # - ENABLE_BEDROCK=true
+      # - LLM_KEY=BEDROCK_ANTHROPIC_CLAUDE3.5_SONNET
+      # - AWS_REGION=us-west-2
+      # - AWS_ACCESS_KEY_ID=FILL_ME_IN_PLEASE
+      # - AWS_SECRET_ACCESS_KEY=FILL_ME_IN_PLEASE
+      # Novita AI Support:
+      # - ENABLE_NOVITA=true
+      # - NOVITA_API_KEY=sk-f1da6a1f2aed4c16903363889bf8862c
+      # - LLM_KEY=NOVITA_DEEPSEEK_R1
+      # - LLM_KEY=NOVITA_DEEPSEEK_V3
+      # - LLM_KEY=NOVITA_LLAMA_3_3_70B
+      # - LLM_KEY=NOVITA_LLAMA_3_2_1B
+      # - LLM_KEY=NOVITA_LLAMA_3_2_3B
+      # - LLM_KEY=NOVITA_LLAMA_3_2_11B_VISION
+      # - LLM_KEY=NOVITA_LLAMA_3_1_8B
+      # - LLM_KEY=NOVITA_LLAMA_3_1_70B
+      # - LLM_KEY=NOVITA_LLAMA_3_1_405B
+      # - LLM_KEY=NOVITA_LLAMA_3_8B
+      # - LLM_KEY=NOVITA_LLAMA_3_70B
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/.streamlit/secrets.toml"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    restart: on-failure
+    ports:
+      - 8080:8080
+      - 9090:9090
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./videos:/data/videos
+      - ./har:/data/har
+      - ./.streamlit:/app/.streamlit
+    environment:
+      # if you want to run skyvern on a remote server,
+      # you need to change the host in VITE_WSS_BASE_URL and VITE_API_BASE_URL to match your server IP
+      # If you're self-hosting this behind a DNS, set the following:
+      #   API route: api.yourdomain.com -> localhost:8000
+      #   UI route: yourdomain.com -> localhost:8080
+      #   Artifact API route: artifact.yourdomain.com -> localhost:9090 (optional)
+      - VITE_WSS_BASE_URL=${VITE_WSS_BASE_URL}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_ARTIFACT_API_BASE_URL=${VITE_ARTIFACT_API_BASE_URL}
+      - VITE_SKYVERN_API_KEY=${VITE_SKYVERN_API_KEY}
+    depends_on:
+      skyvern:
+        condition: service_healthy
